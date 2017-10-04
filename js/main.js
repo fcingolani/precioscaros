@@ -1,3 +1,19 @@
+function fetchJSON(path, params) {
+
+    var url = 'https://d3e6htiiul5ek9.cloudfront.net/prod/' + path + '?';
+
+    url += $.param(params);
+
+    return $.ajax({
+        dataType: "json",
+        url: url,
+        headers: {
+            'x-api-key': 'zIgFou7Gta7g87VFGL9dZ4BEEs19gNYS1SOQZt96'
+        }
+    });
+
+}
+
 new Vue({
     el: '#app',
     data: {
@@ -6,10 +22,11 @@ new Vue({
         locationLat: null,
         locationLong: null,
         productId: null,
-        productData: null
+        productData: null,
+        locations: null
     },
 
-    init: function() {
+    init: function () {
 
         var that = this;
 
@@ -17,7 +34,7 @@ new Vue({
 
         $obj.params.strings.markerText = "Arrastrá el puntero";
 
-        $obj.params.displayError = function(message) {
+        $obj.params.displayError = function (message) {
             console.log("MAPS ERROR: " + message); // instead of alert()
         };
 
@@ -30,31 +47,41 @@ new Vue({
         $obj.init(this._locationPickerContainer);
 
         if (navigator && navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(function(location) {
+            navigator.geolocation.getCurrentPosition(function (location) {
                 that._locationPickerLat.val(location.coords.latitude);
                 that._locationPickerLong.val(location.coords.longitude);
                 $(document).trigger("gllp_update_fields");
-            }, function() {});
+            }, function () { });
         }
 
     },
 
     computed: {
 
-        minPrice: function() {
+        minPrice: function () {
             if (this.productData && this.productData.sucursales) {
-                return _.min(this.productData.sucursales, function(sucursal) {
-                    return sucursal.preciosProducto.precioLista;
-                });
+                return _.chain(this.productData.sucursales)
+                    .filter(function (sucursal) {
+                        return sucursal.preciosProducto;
+                    })
+                    .min(function (sucursal) {
+                        return sucursal.preciosProducto.precioLista;
+                    })
+                    .value();
             }
         },
 
 
-        maxPrice: function() {
+        maxPrice: function () {
             if (this.productData && this.productData.sucursales) {
-                return _.max(this.productData.sucursales, function(sucursal) {
-                    return sucursal.preciosProducto.precioLista;
-                });
+                return _.chain(this.productData.sucursales)
+                    .filter(function (sucursal) {
+                        return sucursal.preciosProducto;
+                    })
+                    .max(function (sucursal) {
+                        return sucursal.preciosProducto.precioLista;
+                    })
+                    .value();
             }
         }
 
@@ -62,17 +89,28 @@ new Vue({
 
     methods: {
 
-        switchScreen: function(screen) {
+        switchScreen: function (screen) {
             this.screen = screen;
         },
 
-        saveLocation: function() {
+        saveLocation: function () {
+            var that = this;
+
             this.locationLat = this._locationPickerLat.val();
             this.locationLong = this._locationPickerLong.val();
-            this.screen = 'scanner';
+
+            fetchJSON('sucursales', {
+                limit: 50,
+                lat: this.locationLat,
+                lng: this.locationLong
+            }).then(function (response) {
+                console.log(that.locations = response.sucursales);
+                that.screen = 'scanner';
+            });
+
         },
 
-        imageChanged: function(e) {
+        imageChanged: function (e) {
             var that = this;
 
             if (e.target.files && e.target.files.length) {
@@ -83,7 +121,7 @@ new Vue({
                     },
                     locate: true,
                     src: url
-                }, function(result) {
+                }, function (result) {
                     console.log('decoded', result);
                     if (result.codeResult) {
                         that.productId = result.codeResult.code;
@@ -97,27 +135,23 @@ new Vue({
 
     watch: {
 
-        locationSearch: _.throttle(function() {
+        locationSearch: _.throttle(function () {
             this._locationPickerSearch.attr('string', this._locationPickerSearch.val());
             $(document).trigger("gllp_perform_search", this._locationPickerSearch);
         }, 3000),
 
-        productId: _.throttle(function() {
+        productId: _.throttle(function () {
             if (('' + this.productId).length != 13) {
                 return;
             }
 
             var that = this;
-            var url = 'https://8kdx6rx8h4.execute-api.us-east-1.amazonaws.com/prod/producto?';
 
-            url += $.param({
+            fetchJSON('producto', {
                 limit: 50,
                 id_producto: this.productId,
-                lat: this.locationLat,
-                lng: this.locationLong
-            });
-
-            $.getJSON(url).then(function(response) {
+                array_sucursales: _.pluck(this.locations, 'id').join(',')
+            }).then(function (response) {
                 console.log(that.productData = response);
             });
         }, 3000)
