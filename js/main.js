@@ -123,9 +123,11 @@ new Vue({
                     src: url
                 }, function (result) {
                     console.log('decoded', result);
-                    if (result.codeResult) {
+                    if (result && result.codeResult) {
                         that.productId = result.codeResult.code;
                         that.screen = 'product';
+                    } else {
+                        alert('No fue posible detectar el código de barras');
                     }
                 })
             }
